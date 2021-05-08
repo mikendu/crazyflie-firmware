@@ -1,14 +1,6 @@
-# Crazyflie Firmware  [![CI](https://github.com/bitcraze/crazyflie-firmware/workflows/CI/badge.svg)](https://github.com/bitcraze/crazyflie-firmware/actions?query=workflow%3ACI)
+# Crazyflie Firmware
 
-This project contains the source code for the firmware used in the Crazyflie range of platforms, including the Crazyflie 2.X and the Roadrunner.
-
-### Crazyflie 1.0 support
-
-The 2017.06 release was the last release with Crazyflie 1.0 support. If you want
-to play with the Crazyflie 1.0 and modify the code, please clone this repo and
-branch off from the 2017.06 tag.
-
-## Building and Flashing
+## Official Build Instructions
 See the [building and flashing instructions](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/building-and-flashing/build/) in the github docs folder.
 
 
@@ -16,7 +8,30 @@ See the [building and flashing instructions](https://www.bitcraze.io/documentati
 
 Check out the [Bitcraze crazyflie-firmware documentation](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/) on our website.
 
+## Custom Build Instructions
 
-## License
+- Download the [ARM Embedded Toolchain](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm/downloads).
+Double check the installation by running:
+```shell
+$ arm-none-eabi-gcc --version
 
-The code is licensed under LGPL-3.0
+arm-none-eabi-gcc.exe (GNU Arm Embedded Toolchain 9-2020-q2-update) 9.3.1 20200408 (release)
+Copyright (C) 2019 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+```
+- Initialize the submodules for the `crazyflie-firmware/` repository
+```shell
+$ git submodule init
+$ git submodule update
+```
+- In a **Windows CMD Shell** first build the target `libarm_math.a`. The ARM gcc runs much slower from a 
+Windows shell, but Cygwin can't build the submodules due to relative path issues.
+```shell
+$ make libarm_math.a
+```
+- In a **Cygwin shell** (not GitBash, not MinTTY), you can now build the firmware:
+```shell
+$ make PLATFORM=cf2 && cp ./cf2.bin ../firmware-tools/crazyflie-firmware/cf2.bin
+```

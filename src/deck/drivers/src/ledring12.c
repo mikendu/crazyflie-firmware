@@ -53,7 +53,7 @@
 #endif
 
 #ifndef LEDRING_TIME_MEM_SIZE
-#define LEDRING_TIME_MEM_SIZE 10
+#define LEDRING_TIME_MEM_SIZE 512
 #endif
 
 typedef struct __attribute__((packed)) timing {

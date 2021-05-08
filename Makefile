@@ -410,7 +410,7 @@ bin/vendor:
 	mkdir -p bin/vendor
 
 libarm_math.a:
-	+$(MAKE) -C $(CRAZYFLIE_BASE)/tools/make/cmsis_dsp/ CRAZYFLIE_BASE=$(abspath $(CRAZYFLIE_BASE)) PROJ_ROOT=$(CURDIR) V=$(V) CROSS_COMPILE=$(CROSS_COMPILE)
+	+$(MAKE) -C $(CRAZYFLIE_BASE)tools/make/cmsis_dsp/ CRAZYFLIE_BASE=./ PROJ_ROOT=$(CURDIR) V=$(V) CROSS_COMPILE=$(CROSS_COMPILE)
 
 clean_version:
 ifeq ($(SHELL),/bin/sh)
@@ -420,7 +420,7 @@ endif
 
 print_version:
 	@echo "Build for the $(PLATFORM_NAME_$(PLATFORM))!"
-	@$(PYTHON) $(CRAZYFLIE_BASE)/tools/make/versionTemplate.py --crazyflie-base $(CRAZYFLIE_BASE) --print-version
+	@$(PYTHON) $(CRAZYFLIE_BASE)tools/make/versionTemplate.py --crazyflie-base $(CRAZYFLIE_BASE) --print-version
 ifeq ($(CLOAD), 1)
 	@echo "Crazyloader build!"
 endif
@@ -429,7 +429,7 @@ ifeq ($(FATFS_DISKIO_TESTS), 1)
 endif
 
 size:
-	@$(PYTHON) $(CRAZYFLIE_BASE)/tools/make/size.py $(SIZE) $(PROG).elf $(MEM_SIZE_FLASH_K) $(MEM_SIZE_RAM_K) $(MEM_SIZE_CCM_K)
+	@$(PYTHON) $(CRAZYFLIE_BASE)tools/make/size.py $(SIZE) $(PROG).elf $(MEM_SIZE_FLASH_K) $(MEM_SIZE_RAM_K) $(MEM_SIZE_CCM_K)
 
 #Radio bootloader
 cload:
