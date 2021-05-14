@@ -55,13 +55,13 @@ static xQueueHandle  txQueue;
 STATIC_MEM_QUEUE_ALLOC(txQueue, RADIOLINK_TX_QUEUE_SIZE, sizeof(SyslinkPacket));
 
 static xQueueHandle crtpPacketDelivery;
-STATIC_MEM_QUEUE_ALLOC(crtpPacketDelivery, RADIOLINK_CRTP_QUEUE_SIZE, sizeof(CRTPPacket));
+STATIC_MEM_QUEUE_ALLOC(crtpPacketDelivery, RADIOLINK_CRTP_QUEUE_SIZE, sizeof(AugmentedPacket));
 
 static bool isInit;
 
 static int radiolinkSendCRTPPacket(CRTPPacket *p);
 static int radiolinkSetEnable(bool enable);
-static int radiolinkReceiveCRTPPacket(CRTPPacket *p);
+static int radiolinkReceiveCRTPPacket(AugmentedPacket *p);
 
 //Local RSSI variable used to enable logging of RSSI values from Radio
 static uint8_t rssi;
@@ -152,7 +152,6 @@ void radiolinkSetPowerDbm(int8_t powerDbm)
 void radiolinkSyslinkDispatch(SyslinkPacket *slp)
 {
   static SyslinkPacket txPacket;
-  ((CRTPPacket*)slp)->broadcast = 0;
 
   if (slp->type == SYSLINK_RADIO_RAW || slp->type == SYSLINK_RADIO_RAW_BROADCAST) {
     lastPacketTick = xTaskGetTickCount();
@@ -160,10 +159,11 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
 
   if (slp->type == SYSLINK_RADIO_RAW)
   {
-    slp->length--; // Decrease to get CRTP size.
     // Assert that we are not dopping any packets
-    ASSERT(xQueueSend(crtpPacketDelivery, &slp->length, 0) == pdPASS);
+    ((AugmentedPacket*)slp)->disableAck = 0;
+    ASSERT(xQueueSend(crtpPacketDelivery, slp, 0) == pdPASS);
     ledseqRun(&seq_linkUp);
+
     // If a radio packet is received, one can be sent
     if (xQueueReceive(txQueue, &txPacket, 0) == pdTRUE)
     {
@@ -172,10 +172,9 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
     }
   } else if (slp->type == SYSLINK_RADIO_RAW_BROADCAST)
   {
-    ((CRTPPacket*)slp)->broadcast = 1;
-    slp->length--; // Decrease to get CRTP size.
     // broadcasts are best effort, so no need to handle the case where the queue is full
-    xQueueSend(crtpPacketDelivery, &slp->length, 0);
+    ((AugmentedPacket*)slp)->disableAck = 1;
+    xQueueSend(crtpPacketDelivery, slp, 0);
     ledseqRun(&seq_linkUp);
     // no ack for broadcasts
   } else if (slp->type == SYSLINK_RADIO_RSSI)
@@ -197,7 +196,7 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
   isConnected = radiolinkIsConnected();
 }
 
-static int radiolinkReceiveCRTPPacket(CRTPPacket *p)
+static int radiolinkReceiveCRTPPacket(AugmentedPacket *p)
 {
   if (xQueueReceive(crtpPacketDelivery, p, M2T(100)) == pdTRUE)
   {

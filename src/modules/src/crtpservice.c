@@ -68,14 +68,14 @@ bool crtpserviceTest(void)
 
 static void crtpSrvTask(void* prm)
 {
-  static CRTPPacket p;
+  static AugmentedPacket p;
 
   crtpInitTaskQueue(CRTP_PORT_LINK);
 
   while(1) {
     crtpReceivePacketBlock(CRTP_PORT_LINK, &p);
 
-    switch (p.channel)
+    switch (p.packet.channel)
     {
       case linkEcho:
         if (echoDelay > 0) {
@@ -84,9 +84,9 @@ static void crtpSrvTask(void* prm)
         crtpSendPacketBlock(&p);
         break;
       case linkSource:
-        p.size = CRTP_MAX_DATA_SIZE;
-        bzero(p.data, CRTP_MAX_DATA_SIZE);
-        strcpy((char*)p.data, "Bitcraze Crazyflie");
+        p.packet.size = CRTP_MAX_DATA_SIZE;
+        bzero(p.packet.data, CRTP_MAX_DATA_SIZE);
+        strcpy((char*)p.packet.data, "Bitcraze Crazyflie");
         crtpSendPacketBlock(&p);
         break;
       case linkSink:

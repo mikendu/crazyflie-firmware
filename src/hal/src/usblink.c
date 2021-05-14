@@ -50,7 +50,7 @@ static uint8_t sendBuffer[64];
 
 static int usblinkSendPacket(CRTPPacket *p);
 static int usblinkSetEnable(bool enable);
-static int usblinkReceivePacket(CRTPPacket *p);
+static int usblinkReceivePacket(AugmentedPacket *p);
 
 STATIC_MEM_TASK_ALLOC(usblinkTask, USBLINK_TASK_STACKSIZE);
 
@@ -81,9 +81,10 @@ static void usblinkTask(void *param)
 
 }
 
-static int usblinkReceivePacket(CRTPPacket *p)
+static int usblinkReceivePacket(AugmentedPacket *p)
 {
-  if (xQueueReceive(crtpPacketDelivery, p, M2T(100)) == pdTRUE)
+  p->disableAck = 0;
+  if (xQueueReceive(crtpPacketDelivery, &p->packet, M2T(100)) == pdTRUE)
   {
     ledseqRun(&seq_linkUp);
     return 0;

@@ -153,7 +153,7 @@ static int logsLen;
 static uint32_t logsCrc;
 static uint16_t logsCount = 0;
 
-static CRTPPacket p;
+static AugmentedPacket p;
 
 static bool isInit = false;
 
@@ -188,8 +188,8 @@ void logInit(void)
   for (int i=0; i<logsLen; i++)
   {
     int len = 5;
-    memcpy(&p.data[0], &logsCrc, 4);
-    p.data[4] = logs[i].type;
+    memcpy(&p.packet.data[0], &logsCrc, 4);
+    p.packet.data[4] = logs[i].type;
     if (logs[i].type & LOG_GROUP) {
       if (logs[i].type & LOG_START) {
         group = logs[i].name;
@@ -203,10 +203,10 @@ void logInit(void)
       }
     }
     if (logs[i].name) {
-      memcpy(&p.data[5], logs[i].name, strlen(logs[i].name));
+      memcpy(&p.packet.data[5], logs[i].name, strlen(logs[i].name));
       len += strlen(logs[i].name);
     }
-    logsCrc = crc32CalculateBuffer(p.data, len);
+    logsCrc = crc32CalculateBuffer(p.packet.data, len);
   }
 
   // Big lock that protects the log datastructures
@@ -244,9 +244,9 @@ void logTask(void * prm)
 		crtpReceivePacketBlock(CRTP_PORT_LOG, &p);
 
 		xSemaphoreTake(logLock, portMAX_DELAY);
-		if (p.channel==TOC_CH)
-		  logTOCProcess(p.data[0]);
-		if (p.channel==CONTROL_CH)
+		if (p.packet.channel==TOC_CH)
+		  logTOCProcess(p.packet.data[0]);
+		if (p.packet.channel==CONTROL_CH)
 		  logControlProcess();
 		xSemaphoreGive(logLock);
 	}
@@ -266,21 +266,21 @@ void logTOCProcess(int command)
     LOG_DEBUG("Packet is TOC_GET_INFO\n");
     ptr = 0;
     group = "";
-    p.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
-    p.size=8;
-    p.data[0]=CMD_GET_INFO;
+    p.packet.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
+    p.packet.size=8;
+    p.packet.data[0]=CMD_GET_INFO;
     if (logsCount < 255) {
-      p.data[1]=logsCount;
+      p.packet.data[1]=logsCount;
     } else {
-      p.data[1]=255;
+      p.packet.data[1]=255;
     }
-    memcpy(&p.data[2], &logsCrc, 4);
-    p.data[6]=LOG_MAX_BLOCKS;
-    p.data[7]=LOG_MAX_OPS;
+    memcpy(&p.packet.data[2], &logsCrc, 4);
+    p.packet.data[6]=LOG_MAX_BLOCKS;
+    p.packet.data[7]=LOG_MAX_OPS;
     crtpSendPacketBlock(&p);
     break;
   case CMD_GET_ITEM:  //Get log variable
-    LOG_DEBUG("Packet is TOC_GET_ITEM Id: %d\n", p.data[1]);
+    LOG_DEBUG("Packet is TOC_GET_ITEM Id: %d\n", p.packet.data[1]);
     for (ptr=0; ptr<logsLen; ptr++) //Ptr points a group
     {
       if (logs[ptr].type & LOG_GROUP)
@@ -292,7 +292,7 @@ void logTOCProcess(int command)
       }
       else                          //Ptr points a variable
       {
-        if (n==p.data[1])
+        if (n==p.packet.data[1])
           break;
         n++;
       }
@@ -301,20 +301,20 @@ void logTOCProcess(int command)
     if (ptr<logsLen)
     {
       LOG_DEBUG("    Item is \"%s\":\"%s\"\n", group, logs[ptr].name);
-      p.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
-      p.data[0]=CMD_GET_ITEM;
-      p.data[1]=n;
-      p.data[2]=logs[ptr].type & TYPE_MASK;
-      p.size=3+2+strlen(group)+strlen(logs[ptr].name);
-      ASSERT(p.size <= CRTP_MAX_DATA_SIZE); // Too long! The name of the group or the parameter may be too long.
-      memcpy(p.data+3, group, strlen(group)+1);
-      memcpy(p.data+3+strlen(group)+1, logs[ptr].name, strlen(logs[ptr].name)+1);
+      p.packet.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
+      p.packet.data[0]=CMD_GET_ITEM;
+      p.packet.data[1]=n;
+      p.packet.data[2]=logs[ptr].type & TYPE_MASK;
+      p.packet.size=3+2+strlen(group)+strlen(logs[ptr].name);
+      ASSERT(p.packet.size <= CRTP_MAX_DATA_SIZE); // Too long! The name of the group or the parameter may be too long.
+      memcpy(p.packet.data+3, group, strlen(group)+1);
+      memcpy(p.packet.data+3+strlen(group)+1, logs[ptr].name, strlen(logs[ptr].name)+1);
       crtpSendPacketBlock(&p);
     } else {
       LOG_DEBUG("    Index out of range!");
-      p.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
-      p.data[0]=CMD_GET_ITEM;
-      p.size=1;
+      p.packet.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
+      p.packet.data[0]=CMD_GET_ITEM;
+      p.packet.size=1;
       crtpSendPacketBlock(&p);
     }
     break;
@@ -322,17 +322,17 @@ void logTOCProcess(int command)
     LOG_DEBUG("Packet is TOC_GET_INFO\n");
     ptr = 0;
     group = "";
-    p.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
-    p.size=9;
-    p.data[0]=CMD_GET_INFO_V2;
-    memcpy(&p.data[1], &logsCount, 2);
-    memcpy(&p.data[3], &logsCrc, 4);
-    p.data[7]=LOG_MAX_BLOCKS;
-    p.data[8]=LOG_MAX_OPS;
+    p.packet.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
+    p.packet.size=9;
+    p.packet.data[0]=CMD_GET_INFO_V2;
+    memcpy(&p.packet.data[1], &logsCount, 2);
+    memcpy(&p.packet.data[3], &logsCrc, 4);
+    p.packet.data[7]=LOG_MAX_BLOCKS;
+    p.packet.data[8]=LOG_MAX_OPS;
     crtpSendPacketBlock(&p);
     break;
   case CMD_GET_ITEM_V2:  //Get log variable
-    memcpy(&logId, &p.data[1], 2);
+    memcpy(&logId, &p.packet.data[1], 2);
     LOG_DEBUG("Packet is TOC_GET_ITEM Id: %d\n", logId);
     for (ptr=0; ptr<logsLen; ptr++) //Ptr points a group
     {
@@ -354,20 +354,20 @@ void logTOCProcess(int command)
     if (ptr<logsLen)
     {
       LOG_DEBUG("    Item is \"%s\":\"%s\"\n", group, logs[ptr].name);
-      p.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
-      p.data[0]=CMD_GET_ITEM_V2;
-      memcpy(&p.data[1], &logId, 2);
-      p.data[3]=logs[ptr].type & TYPE_MASK;
-      p.size=4+2+strlen(group)+strlen(logs[ptr].name);
-      ASSERT(p.size <= CRTP_MAX_DATA_SIZE); // Too long! The name of the group or the parameter may be too long.
-      memcpy(p.data+4, group, strlen(group)+1);
-      memcpy(p.data+4+strlen(group)+1, logs[ptr].name, strlen(logs[ptr].name)+1);
+      p.packet.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
+      p.packet.data[0]=CMD_GET_ITEM_V2;
+      memcpy(&p.packet.data[1], &logId, 2);
+      p.packet.data[3]=logs[ptr].type & TYPE_MASK;
+      p.packet.size=4+2+strlen(group)+strlen(logs[ptr].name);
+      ASSERT(p.packet.size <= CRTP_MAX_DATA_SIZE); // Too long! The name of the group or the parameter may be too long.
+      memcpy(p.packet.data+4, group, strlen(group)+1);
+      memcpy(p.packet.data+4+strlen(group)+1, logs[ptr].name, strlen(logs[ptr].name)+1);
       crtpSendPacketBlock(&p);
     } else {
       LOG_DEBUG("    Index out of range!");
-      p.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
-      p.data[0]=CMD_GET_ITEM_V2;
-      p.size=1;
+      p.packet.header=CRTP_HEADER(CRTP_PORT_LOG, TOC_CH);
+      p.packet.data[0]=CMD_GET_ITEM_V2;
+      p.packet.size=1;
       crtpSendPacketBlock(&p);
     }
     break;
@@ -378,46 +378,46 @@ void logControlProcess()
 {
   int ret = ENOEXEC;
 
-  switch(p.data[0])
+  switch(p.packet.data[0])
   {
     case CONTROL_CREATE_BLOCK:
-      ret = logCreateBlock( p.data[1],
-                            (struct ops_setting*)&p.data[2],
-                            (p.size-2)/sizeof(struct ops_setting) );
+      ret = logCreateBlock( p.packet.data[1],
+                            (struct ops_setting*)&p.packet.data[2],
+                            (p.packet.size-2)/sizeof(struct ops_setting) );
       break;
     case CONTROL_APPEND_BLOCK:
-      ret = logAppendBlock( p.data[1],
-                            (struct ops_setting*)&p.data[2],
-                            (p.size-2)/sizeof(struct ops_setting) );
+      ret = logAppendBlock( p.packet.data[1],
+                            (struct ops_setting*)&p.packet.data[2],
+                            (p.packet.size-2)/sizeof(struct ops_setting) );
       break;
     case CONTROL_DELETE_BLOCK:
-      ret = logDeleteBlock( p.data[1] );
+      ret = logDeleteBlock( p.packet.data[1] );
       break;
     case CONTROL_START_BLOCK:
-      ret = logStartBlock( p.data[1], p.data[2]*10);
+      ret = logStartBlock( p.packet.data[1], p.packet.data[2]*10);
       break;
     case CONTROL_STOP_BLOCK:
-      ret = logStopBlock( p.data[1] );
+      ret = logStopBlock( p.packet.data[1] );
       break;
     case CONTROL_RESET:
       logReset();
       ret = 0;
       break;
     case CONTROL_CREATE_BLOCK_V2:
-      ret = logCreateBlockV2( p.data[1],
-                            (struct ops_setting_v2*)&p.data[2],
-                            (p.size-2)/sizeof(struct ops_setting_v2) );
+      ret = logCreateBlockV2( p.packet.data[1],
+                            (struct ops_setting_v2*)&p.packet.data[2],
+                            (p.packet.size-2)/sizeof(struct ops_setting_v2) );
       break;
     case CONTROL_APPEND_BLOCK_V2:
-      ret = logAppendBlockV2( p.data[1],
-                            (struct ops_setting_v2*)&p.data[2],
-                            (p.size-2)/sizeof(struct ops_setting_v2) );
+      ret = logAppendBlockV2( p.packet.data[1],
+                            (struct ops_setting_v2*)&p.packet.data[2],
+                            (p.packet.size-2)/sizeof(struct ops_setting_v2) );
       break;
   }
 
   //Commands answer
-  p.data[2] = ret;
-  p.size = 3;
+  p.packet.data[2] = ret;
+  p.packet.size = 3;
   crtpSendPacketBlock(&p);
 }
 
@@ -703,11 +703,11 @@ void logBlockTimed(xTimerHandle timer)
 }
 
 /* Appends data to a packet if space is available; returns false on failure. */
-static bool appendToPacket(CRTPPacket * pk, const void * data, size_t n) {
-  if (pk->size <= CRTP_MAX_DATA_SIZE - n)
+static bool appendToPacket(AugmentedPacket * pk, const void * data, size_t n) {
+  if (pk->packet.size <= CRTP_MAX_DATA_SIZE - n)
   {
-    memcpy(&pk->data[pk->size], data, n);
-    pk->size += n;
+    memcpy(&pk->packet.data[pk->packet.size], data, n);
+    pk->packet.size += n;
     return true;
   }
   else return false;
@@ -718,19 +718,19 @@ void logRunBlock(void * arg)
 {
   struct log_block *blk = arg;
   struct log_ops *ops = blk->ops;
-  static CRTPPacket pk;
+  static AugmentedPacket pk;
   unsigned int timestamp;
 
   xSemaphoreTake(logLock, portMAX_DELAY);
 
   timestamp = ((long long)xTaskGetTickCount())/portTICK_RATE_MS;
 
-  pk.header = CRTP_HEADER(CRTP_PORT_LOG, LOG_CH);
-  pk.size = 4;
-  pk.data[0] = blk->id;
-  pk.data[1] = timestamp&0x0ff;
-  pk.data[2] = (timestamp>>8)&0x0ff;
-  pk.data[3] = (timestamp>>16)&0x0ff;
+  pk.packet.header = CRTP_HEADER(CRTP_PORT_LOG, LOG_CH);
+  pk.packet.size = 4;
+  pk.packet.data[0] = blk->id;
+  pk.packet.data[1] = timestamp&0x0ff;
+  pk.packet.data[2] = (timestamp>>8)&0x0ff;
+  pk.packet.data[3] = (timestamp>>16)&0x0ff;
 
   while (ops)
   {

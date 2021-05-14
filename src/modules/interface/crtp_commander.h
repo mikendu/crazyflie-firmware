@@ -31,7 +31,7 @@
 #include "crtp.h"
 
 void crtpCommanderInit(void);
-void crtpCommanderRpytDecodeSetpoint(setpoint_t *setpoint, CRTPPacket *pk);
-void crtpCommanderGenericDecodeSetpoint(setpoint_t *setpoint, CRTPPacket *pk);
+void crtpCommanderRpytDecodeSetpoint(setpoint_t *setpoint, AugmentedPacket *pk);
+void crtpCommanderGenericDecodeSetpoint(setpoint_t *setpoint, AugmentedPacket *pk);
 
 #endif /* CRTP_COMMANDER_H_ */

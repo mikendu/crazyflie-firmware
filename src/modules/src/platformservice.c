@@ -62,7 +62,7 @@ typedef enum {
 
 static void platformSrvTask(void*);
 static void platformCommandProcess(uint8_t command, uint8_t *data);
-static void versionCommandProcess(CRTPPacket *p);
+static void versionCommandProcess(AugmentedPacket *p);
 
 void platformserviceInit(void)
 {
@@ -84,17 +84,17 @@ bool platformserviceTest(void)
 
 static void platformSrvTask(void* prm)
 {
-  static CRTPPacket p;
+  static AugmentedPacket p;
 
   crtpInitTaskQueue(CRTP_PORT_PLATFORM);
 
   while(1) {
     crtpReceivePacketBlock(CRTP_PORT_PLATFORM, &p);
 
-    switch (p.channel)
+    switch (p.packet.channel)
     {
       case platformCommand:
-        platformCommandProcess(p.data[0], &p.data[1]);
+        platformCommandProcess(p.packet.data[0], &p.packet.data[1]);
         crtpSendPacketBlock(&p);
         break;
       case versionCommand:
@@ -125,31 +125,31 @@ static void platformCommandProcess(uint8_t command, uint8_t *data)
   }
 }
 
-void platformserviceSendAppchannelPacket(CRTPPacket *p)
+void platformserviceSendAppchannelPacket(AugmentedPacket *p)
 {
-  p->port = CRTP_PORT_PLATFORM;
-  p->channel = appChannel;
+  p->packet.port = CRTP_PORT_PLATFORM;
+  p->packet.channel = appChannel;
   crtpSendPacketBlock(p);
 }
 
-static void versionCommandProcess(CRTPPacket *p)
+static void versionCommandProcess(AugmentedPacket *p)
 {
-  switch (p->data[0]) {
+  switch (p->packet.data[0]) {
     case getProtocolVersion:
-      *(int*)&p->data[1] = PROTOCOL_VERSION;
-      p->size = 5;
+      *(int*)&p->packet.data[1] = PROTOCOL_VERSION;
+      p->packet.size = 5;
       crtpSendPacketBlock(p);
       break;
     case getFirmwareVersion:
-      strncpy((char*)&p->data[1], V_STAG, CRTP_MAX_DATA_SIZE-1);
-      p->size = (strlen(V_STAG)>CRTP_MAX_DATA_SIZE-1)?CRTP_MAX_DATA_SIZE:strlen(V_STAG)+1;
+      strncpy((char*)&p->packet.data[1], V_STAG, CRTP_MAX_DATA_SIZE-1);
+      p->packet.size = (strlen(V_STAG)>CRTP_MAX_DATA_SIZE-1)?CRTP_MAX_DATA_SIZE:strlen(V_STAG)+1;
       crtpSendPacketBlock(p);
       break;
     case getDeviceTypeName:
       {
       const char* name = platformConfigGetDeviceTypeName();
-      strncpy((char*)&p->data[1], name, CRTP_MAX_DATA_SIZE-1);
-      p->size = (strlen(name)>CRTP_MAX_DATA_SIZE-1)?CRTP_MAX_DATA_SIZE:strlen(name)+1;
+      strncpy((char*)&p->packet.data[1], name, CRTP_MAX_DATA_SIZE-1);
+      p->packet.size = (strlen(name)>CRTP_MAX_DATA_SIZE-1)?CRTP_MAX_DATA_SIZE:strlen(name)+1;
       crtpSendPacketBlock(p);
       }
       break;

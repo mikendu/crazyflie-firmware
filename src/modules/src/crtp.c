@@ -88,7 +88,7 @@ void crtpInit(void)
   if(isInit)
     return;
 
-  txQueue = xQueueCreate(CRTP_TX_QUEUE_SIZE, sizeof(CRTPPacket));
+  txQueue = xQueueCreate(CRTP_TX_QUEUE_SIZE, sizeof(AugmentedPacket));
   DEBUG_QUEUE_MONITOR_REGISTER(txQueue);
 
   STATIC_MEM_TASK_CREATE(crtpTxTask, crtpTxTask, CRTP_TX_TASK_NAME, NULL, CRTP_TX_TASK_PRI);
@@ -106,11 +106,11 @@ void crtpInitTaskQueue(CRTPPort portId)
 {
   ASSERT(queues[portId] == NULL);
 
-  queues[portId] = xQueueCreate(CRTP_RX_QUEUE_SIZE, sizeof(CRTPPacket));
+  queues[portId] = xQueueCreate(CRTP_RX_QUEUE_SIZE, sizeof(AugmentedPacket));
   DEBUG_QUEUE_MONITOR_REGISTER(queues[portId]);
 }
 
-int crtpReceivePacket(CRTPPort portId, CRTPPacket *p)
+int crtpReceivePacket(CRTPPort portId, AugmentedPacket *p)
 {
   ASSERT(queues[portId]);
   ASSERT(p);
@@ -118,7 +118,7 @@ int crtpReceivePacket(CRTPPort portId, CRTPPacket *p)
   return xQueueReceive(queues[portId], p, 0);
 }
 
-int crtpReceivePacketBlock(CRTPPort portId, CRTPPacket *p)
+int crtpReceivePacketBlock(CRTPPort portId, AugmentedPacket *p)
 {
   ASSERT(queues[portId]);
   ASSERT(p);
@@ -127,7 +127,7 @@ int crtpReceivePacketBlock(CRTPPort portId, CRTPPacket *p)
 }
 
 
-int crtpReceivePacketWait(CRTPPort portId, CRTPPacket *p, int wait)
+int crtpReceivePacketWait(CRTPPort portId, AugmentedPacket *p, int wait)
 {
   ASSERT(queues[portId]);
   ASSERT(p);
@@ -142,20 +142,20 @@ int crtpGetFreeTxQueuePackets(void)
 
 void crtpTxTask(void *param)
 {
-  CRTPPacket p;
+  AugmentedPacket p;
 
   while (true)
   {
     if (link != &nopLink)
     {
-      p.broadcast = 0;
+      p.disableAck = 0;
       if (xQueueReceive(txQueue, &p, portMAX_DELAY) == pdTRUE)
       {
-        if (p.broadcast) {
+        if (p.disableAck) {
           continue;
         }
         // Keep testing, if the link changes to USB it will go though
-        while (link->sendPacket(&p) == false)
+        while (link->sendPacket(&p.packet) == false)
         {
           // Relaxation time
           vTaskDelay(M2T(10));
@@ -173,7 +173,7 @@ void crtpTxTask(void *param)
 
 void crtpRxTask(void *param)
 {
-  CRTPPacket p;
+  AugmentedPacket p;
 
   while (true)
   {
@@ -181,15 +181,15 @@ void crtpRxTask(void *param)
     {
       if (!link->receivePacket(&p))
       {
-        if (queues[p.port])
+        if (queues[p.packet.port])
         {
           // Block, since we should never drop a packet
-          xQueueSend(queues[p.port], &p, portMAX_DELAY);
+          xQueueSend(queues[p.packet.port], &p, portMAX_DELAY);
         }
 
-        if (callbacks[p.port])
+        if (callbacks[p.packet.port])
         {
-          callbacks[p.port](&p);
+          callbacks[p.packet.port](&p);
         }
 
         stats.rxCount++;
@@ -211,23 +211,23 @@ void crtpRegisterPortCB(int port, CrtpCallback cb)
   callbacks[port] = cb;
 }
 
-int crtpSendPacket(CRTPPacket *p)
+int crtpSendPacket(AugmentedPacket *p)
 {
   ASSERT(p);
-  ASSERT(p->size <= CRTP_MAX_DATA_SIZE);
+  ASSERT(p->packet.size <= CRTP_MAX_DATA_SIZE);
 
-  if (p->broadcast) {
+  if (p->disableAck) {
     return pdPASS;
   }
   return xQueueSend(txQueue, p, 0);
 }
 
-int crtpSendPacketBlock(CRTPPacket *p)
+int crtpSendPacketBlock(AugmentedPacket *p)
 {
   ASSERT(p);
-  ASSERT(p->size <= CRTP_MAX_DATA_SIZE);
+  ASSERT(p->packet.size <= CRTP_MAX_DATA_SIZE);
 
-  if (p->broadcast) {
+  if (p->disableAck) {
     return pdPASS;
   }
   return xQueueSend(txQueue, p, portMAX_DELAY);

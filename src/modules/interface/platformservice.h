@@ -38,7 +38,7 @@ void platformserviceInit(void);
 
 bool platformserviceTest(void);
 
-void platformserviceSendAppchannelPacket(CRTPPacket *p);
+void platformserviceSendAppchannelPacket(AugmentedPacket *p);
 
 #endif /* __PLATFORMSERVICE_H__ */
 

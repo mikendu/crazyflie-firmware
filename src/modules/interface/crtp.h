@@ -59,7 +59,7 @@ typedef struct _CRTPPacket
         struct {
 #ifndef CRTP_HEADER_COMPAT
           uint8_t channel     : 2;      //< Selected channel within port
-          uint8_t broadcast   : 2;      // Re-purposing for a broadcast flag (was previously reserved)
+          uint8_t reserved    : 2;      // Re-purposing for a broadcast flag (was previously reserved)
           uint8_t port        : 4;      //< Selected port
 #else
           uint8_t channel  : 2;
@@ -74,7 +74,13 @@ typedef struct _CRTPPacket
   };
 } __attribute__((packed)) CRTPPacket;
 
-typedef void (*CrtpCallback)(CRTPPacket *);
+typedef struct _AugmentedPacket
+{
+  uint8_t disableAck;
+  CRTPPacket packet;
+} __attribute__((packed)) AugmentedPacket;
+
+typedef void (*CrtpCallback)(AugmentedPacket *);
 
 /**
  * Initialize the CRTP stack
@@ -109,14 +115,14 @@ void crtpRegisterPortCB(int port, CrtpCallback cb);
  *
  * @param[in] p CRTPPacket to send
  */
-int crtpSendPacket(CRTPPacket *p);
+int crtpSendPacket(AugmentedPacket *p);
 
 /**
  * Put a packet in the TX task
  *
  * If the TX stack is full, the function block until one place is free (Good for console implementation)
  */
-int crtpSendPacketBlock(CRTPPacket *p);
+int crtpSendPacketBlock(AugmentedPacket *p);
 
 /**
  * Fetch a packet with a specidied task ID.
@@ -126,7 +132,7 @@ int crtpSendPacketBlock(CRTPPacket *p);
  *
  * @returns status of fetch from queue
  */
-int crtpReceivePacket(CRTPPort taskId, CRTPPacket *p);
+int crtpReceivePacket(CRTPPort taskId, AugmentedPacket *p);
 
 /**
  * Fetch a packet with a specidied task ID. Wait some time befor giving up
@@ -137,7 +143,7 @@ int crtpReceivePacket(CRTPPort taskId, CRTPPacket *p);
  *
  * @returns status of fetch from queue
  */
-int crtpReceivePacketWait(CRTPPort taskId, CRTPPacket *p, int wait);
+int crtpReceivePacketWait(CRTPPort taskId, AugmentedPacket *p, int wait);
 
 /**
  * Get the number of free tx packets in the queue
@@ -154,7 +160,7 @@ int crtpGetFreeTxQueuePackets(void);
  *
  * @return status of fetch from queue
  */
-int crtpReceivePacketBlock(CRTPPort taskId, CRTPPacket *p);
+int crtpReceivePacketBlock(CRTPPort taskId, AugmentedPacket *p);
 
 /**
  * Function pointer structure to be filled by the CRTP link to permits CRTP to
@@ -164,7 +170,7 @@ struct crtpLinkOperations
 {
   int (*setEnable)(bool enable);
   int (*sendPacket)(CRTPPacket *pk);
-  int (*receivePacket)(CRTPPacket *pk);
+  int (*receivePacket)(AugmentedPacket *pk);
   bool (*isConnected)(void);
   int (*reset)(void);
 };

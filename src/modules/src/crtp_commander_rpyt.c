@@ -116,9 +116,9 @@ static void yawModeUpdate(setpoint_t *setpoint)
   }
 }
 
-void crtpCommanderRpytDecodeSetpoint(setpoint_t *setpoint, CRTPPacket *pk)
+void crtpCommanderRpytDecodeSetpoint(setpoint_t *setpoint, AugmentedPacket *pk)
 {
-  struct CommanderCrtpLegacyValues *values = (struct CommanderCrtpLegacyValues*)pk->data;
+  struct CommanderCrtpLegacyValues *values = (struct CommanderCrtpLegacyValues*)pk->packet.data;
 
   if (commanderGetActivePriority() == COMMANDER_PRIORITY_DISABLE) {
     thrustLocked = true;

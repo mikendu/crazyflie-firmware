@@ -380,22 +380,22 @@ const static packetDecoder_t packetDecoders[] = {
 };
 
 /* Decoder switch */
-void crtpCommanderGenericDecodeSetpoint(setpoint_t *setpoint, CRTPPacket *pk)
+void crtpCommanderGenericDecodeSetpoint(setpoint_t *setpoint, AugmentedPacket *pk)
 {
   static int nTypes = -1;
 
-  ASSERT(pk->size > 0);
+  ASSERT(pk->packet.size > 0);
 
   if (nTypes<0) {
     nTypes = sizeof(packetDecoders)/sizeof(packetDecoders[0]);
   }
 
-  uint8_t type = pk->data[0];
+  uint8_t type = pk->packet.data[0];
 
   memset(setpoint, 0, sizeof(setpoint_t));
 
   if (type<nTypes && (packetDecoders[type] != NULL)) {
-    packetDecoders[type](setpoint, type, ((char*)pk->data)+1, pk->size-1);
+    packetDecoders[type](setpoint, type, ((char*)pk->packet.data)+1, pk->packet.size-1);
   }
 }
 

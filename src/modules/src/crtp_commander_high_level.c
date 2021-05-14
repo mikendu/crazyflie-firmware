@@ -382,17 +382,17 @@ static int handleCommand(const enum TrajectoryCommand_e command, const uint8_t* 
 
 void crtpCommanderHighLevelTask(void * prm)
 {
-  CRTPPacket p;
+  AugmentedPacket p;
   crtpInitTaskQueue(CRTP_PORT_SETPOINT_HL);
 
   while(1) {
     crtpReceivePacketBlock(CRTP_PORT_SETPOINT_HL, &p);
 
-    int ret = handleCommand(p.data[0], &p.data[1]);
+    int ret = handleCommand(p.packet.data[0], &p.packet.data[1]);
 
     //answer
-    p.data[3] = ret;
-    p.size = 4;
+    p.packet.data[3] = ret;
+    p.packet.size = 4;
     crtpSendPacketBlock(&p);
   }
 }
@@ -631,11 +631,11 @@ static bool handleMemWrite(const uint32_t memAddr, const uint8_t writeLen, const
   return crtpCommanderHighLevelWriteTrajectory(memAddr, writeLen, buffer);
 }
 
-uint8_t* initCrtpPacket(CRTPPacket* packet, const enum TrajectoryCommand_e command)
+uint8_t* initCrtpPacket(AugmentedPacket* packet, const enum TrajectoryCommand_e command)
 {
-  packet->port = CRTP_PORT_SETPOINT_HL;
-  packet->data[0] = command;
-  return &packet->data[1];
+  packet->packet.port = CRTP_PORT_SETPOINT_HL;
+  packet->packet.data[0] = command;
+  return &packet->packet.data[1];
 }
 
 int crtpCommanderHighLevelTakeoff(const float absoluteHeight_m, const float duration_s)

@@ -35,7 +35,7 @@
 
 static bool isInit;
 
-static void commanderCrtpCB(CRTPPacket* pk);
+static void commanderCrtpCB(AugmentedPacket* pk);
 
 void crtpCommanderInit(void)
 {
@@ -107,23 +107,23 @@ const static metaCommandDecoder_t metaCommandDecoders[] = {
 };
 
 /* Decoder switch */
-static void commanderCrtpCB(CRTPPacket* pk)
+static void commanderCrtpCB(AugmentedPacket* pk)
 {
   static setpoint_t setpoint;
 
-  if(pk->port == CRTP_PORT_SETPOINT && pk->channel == 0) {
+  if(pk->packet.port == CRTP_PORT_SETPOINT && pk->packet.channel == 0) {
     crtpCommanderRpytDecodeSetpoint(&setpoint, pk);
     commanderSetSetpoint(&setpoint, COMMANDER_PRIORITY_CRTP);
-  } else if (pk->port == CRTP_PORT_SETPOINT_GENERIC) {
-    switch (pk->channel) {
+  } else if (pk->packet.port == CRTP_PORT_SETPOINT_GENERIC) {
+    switch (pk->packet.channel) {
     case SET_SETPOINT_CHANNEL:
       crtpCommanderGenericDecodeSetpoint(&setpoint, pk);
       commanderSetSetpoint(&setpoint, COMMANDER_PRIORITY_CRTP);
       break;
     case META_COMMAND_CHANNEL: {
-        uint8_t metaCmd = pk->data[0];
+        uint8_t metaCmd = pk->packet.data[0];
         if (metaCmd < nMetaCommands && (metaCommandDecoders[metaCmd] != NULL)) {
-          metaCommandDecoders[metaCmd](pk->data + 1, pk->size - 1);
+          metaCommandDecoders[metaCmd](pk->packet.data + 1, pk->packet.size - 1);
         }
       }
       break;

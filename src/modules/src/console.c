@@ -42,7 +42,7 @@
 #endif
 #endif
 
-static CRTPPacket messageToPrint;
+static AugmentedPacket messageToPrint;
 static bool messageSendingIsPending = false;
 static xSemaphoreHandle synch = NULL;
 
@@ -60,7 +60,7 @@ static bool consoleSendMessage(void)
 {
   if (crtpSendPacket(&messageToPrint) == pdTRUE)
   {
-    messageToPrint.size = 0;
+    messageToPrint.packet.size = 0;
     messageSendingIsPending = false;
   }
   else
@@ -76,8 +76,8 @@ void consoleInit()
   if (isInit)
     return;
 
-  messageToPrint.size = 0;
-  messageToPrint.header = CRTP_HEADER(CRTP_PORT_CONSOLE, 0);
+  messageToPrint.packet.size = 0;
+  messageToPrint.packet.header = CRTP_HEADER(CRTP_PORT_CONSOLE, 0);
   vSemaphoreCreateBinary(synch);
   messageSendingIsPending = false;
 
@@ -111,13 +111,13 @@ int consolePutchar(int ch)
 
     if (! messageSendingIsPending) 
     {
-      if (messageToPrint.size < CRTP_MAX_DATA_SIZE)
+      if (messageToPrint.packet.size < CRTP_MAX_DATA_SIZE)
       {
-        messageToPrint.data[messageToPrint.size] = (unsigned char)ch;
-        messageToPrint.size++;
+        messageToPrint.packet.data[messageToPrint.packet.size] = (unsigned char)ch;
+        messageToPrint.packet.size++;
       }
 
-      if (ch == '\n' || messageToPrint.size >= CRTP_MAX_DATA_SIZE)
+      if (ch == '\n' || messageToPrint.packet.size >= CRTP_MAX_DATA_SIZE)
       {
         if (crtpGetFreeTxQueuePackets() == 1)
         {
@@ -137,10 +137,10 @@ int consolePutcharFromISR(int ch) {
   BaseType_t higherPriorityTaskWoken;
 
   if (xSemaphoreTakeFromISR(synch, &higherPriorityTaskWoken) == pdTRUE) {
-    if (messageToPrint.size < CRTP_MAX_DATA_SIZE)
+    if (messageToPrint.packet.size < CRTP_MAX_DATA_SIZE)
     {
-      messageToPrint.data[messageToPrint.size] = (unsigned char)ch;
-      messageToPrint.size++;
+      messageToPrint.packet.data[messageToPrint.packet.size] = (unsigned char)ch;
+      messageToPrint.packet.size++;
     }
     xSemaphoreGiveFromISR(synch, &higherPriorityTaskWoken);
   }
@@ -170,10 +170,10 @@ void consoleFlush(void)
 
 static int findMarkerStart()
 {
-  int start = messageToPrint.size;
+  int start = messageToPrint.packet.size;
   
   // If last char is new line, rewind one char since the marker contains a new line.
-  if (start > 0 && messageToPrint.data[start - 1] == '\n')
+  if (start > 0 && messageToPrint.packet.data[start - 1] == '\n')
   {
     start -= 1;
   }
@@ -191,6 +191,6 @@ static void addBufferFullMarker()
   }
 
   int startMarker = endMarker - sizeof(bufferFullMsg);
-  memcpy(&messageToPrint.data[startMarker], bufferFullMsg, sizeof(bufferFullMsg));
-  messageToPrint.size = startMarker + sizeof(bufferFullMsg);
+  memcpy(&messageToPrint.packet.data[startMarker], bufferFullMsg, sizeof(bufferFullMsg));
+  messageToPrint.packet.size = startMarker + sizeof(bufferFullMsg);
 }

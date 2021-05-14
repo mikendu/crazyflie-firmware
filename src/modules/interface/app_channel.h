@@ -93,4 +93,4 @@ void appchannelInit();
 /**
  * 
  */
-void appchannelIncomingPacket(CRTPPacket *p);
+void appchannelIncomingPacket(AugmentedPacket *p);

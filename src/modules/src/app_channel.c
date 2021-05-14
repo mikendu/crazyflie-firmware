@@ -43,12 +43,12 @@ static bool overflow;
 
 void appchannelSendPacket(void* data, size_t length)
 {
-  static CRTPPacket packet;
+  static AugmentedPacket packet;
 
   xSemaphoreTake(sendMutex, portMAX_DELAY);
 
-  packet.size = (length > APPCHANNEL_MTU)?APPCHANNEL_MTU:length;
-  memcpy(packet.data, data, packet.size);
+  packet.packet.size = (length > APPCHANNEL_MTU)?APPCHANNEL_MTU:length;
+  memcpy(packet.packet.data, data, packet.packet.size);
 
   // CRTP channel and ports are set in platformservice
   platformserviceSendAppchannelPacket(&packet);
@@ -57,7 +57,7 @@ void appchannelSendPacket(void* data, size_t length)
 }
 
 size_t appchannelReceivePacket(void* buffer, size_t max_length, int timeout_ms) {
-  static CRTPPacket packet;
+  static AugmentedPacket packet;
   int tickToWait = 0;
 
   if (timeout_ms < 0) {
@@ -69,8 +69,8 @@ size_t appchannelReceivePacket(void* buffer, size_t max_length, int timeout_ms) 
   int result = xQueueReceive(rxQueue, &packet, tickToWait);
 
   if (result == pdTRUE) {
-    int lenghtToCopy = (max_length < packet.size)?max_length:packet.size;
-    memcpy(buffer, packet.data, lenghtToCopy);
+    int lenghtToCopy = (max_length < packet.packet.size)?max_length:packet.packet.size;
+    memcpy(buffer, packet.packet.data, lenghtToCopy);
     return lenghtToCopy;
   } else {
     return 0;
@@ -89,12 +89,12 @@ void appchannelInit()
 {
   sendMutex = xSemaphoreCreateMutex();
 
-  rxQueue = xQueueCreate(10, sizeof(CRTPPacket));
+  rxQueue = xQueueCreate(10, sizeof(AugmentedPacket));
 
   overflow = false;
 }
 
-void appchannelIncomingPacket(CRTPPacket *p)
+void appchannelIncomingPacket(AugmentedPacket *p)
 {
   int res = xQueueSend(rxQueue, p, 0);
 

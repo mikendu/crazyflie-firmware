@@ -106,11 +106,11 @@ static positionMeasurement_t ext_pos;
 // Struct for logging pose information
 static poseMeasurement_t ext_pose;
 
-static CRTPPacket pkRange;
+static AugmentedPacket pkRange;
 static uint8_t rangeIndex;
 static bool enableRangeStreamFloat = false;
 
-static CRTPPacket LhAngle;
+static AugmentedPacket LhAngle;
 static bool enableLighthouseAngleStream = false;
 static float extPosStdDev = 0.01;
 static float extQuatStdDev = 4.5e-3;
@@ -118,10 +118,10 @@ static bool isInit = false;
 static uint8_t my_id;
 static uint16_t tickOfLastPacket; // tick when last packet was received
 
-static void locSrvCrtpCB(CRTPPacket* pk);
-static void extPositionHandler(CRTPPacket* pk);
-static void genericLocHandle(CRTPPacket* pk);
-static void extPositionPackedHandler(CRTPPacket* pk);
+static void locSrvCrtpCB(AugmentedPacket* pk);
+static void extPositionHandler(AugmentedPacket* pk);
+static void genericLocHandle(AugmentedPacket* pk);
+static void extPositionPackedHandler(AugmentedPacket* pk);
 
 void locSrvInit()
 {
@@ -136,9 +136,9 @@ void locSrvInit()
   isInit = true;
 }
 
-static void locSrvCrtpCB(CRTPPacket* pk)
+static void locSrvCrtpCB(AugmentedPacket* pk)
 {
-  switch (pk->channel)
+  switch (pk->packet.channel)
   {
     case EXT_POSITION:
       extPositionHandler(pk);
@@ -161,8 +161,8 @@ static void updateLogFromExtPos()
   ext_pose.z = ext_pos.z;
 }
 
-static void extPositionHandler(CRTPPacket* pk) {
-  const struct CrtpExtPosition* data = (const struct CrtpExtPosition*)pk->data;
+static void extPositionHandler(AugmentedPacket* pk) {
+  const struct CrtpExtPosition* data = (const struct CrtpExtPosition*)pk->packet.data;
 
   ext_pos.x = data->x;
   ext_pos.y = data->y;
@@ -175,8 +175,8 @@ static void extPositionHandler(CRTPPacket* pk) {
   tickOfLastPacket = xTaskGetTickCount();
 }
 
-static void extPoseHandler(const CRTPPacket* pk) {
-  const struct CrtpExtPose* data = (const struct CrtpExtPose*)&pk->data[1];
+static void extPoseHandler(const AugmentedPacket* pk) {
+  const struct CrtpExtPose* data = (const struct CrtpExtPose*)&pk->packet.data[1];
 
   ext_pose.x = data->x;
   ext_pose.y = data->y;
@@ -192,10 +192,10 @@ static void extPoseHandler(const CRTPPacket* pk) {
   tickOfLastPacket = xTaskGetTickCount();
 }
 
-static void extPosePackedHandler(const CRTPPacket* pk) {
-  uint8_t numItems = (pk->size - 1) / sizeof(extPosePackedItem);
+static void extPosePackedHandler(const AugmentedPacket* pk) {
+  uint8_t numItems = (pk->packet.size - 1) / sizeof(extPosePackedItem);
   for (uint8_t i = 0; i < numItems; ++i) {
-    const extPosePackedItem* item = (const extPosePackedItem*)&pk->data[1 + i * sizeof(extPosePackedItem)];
+    const extPosePackedItem* item = (const extPosePackedItem*)&pk->packet.data[1 + i * sizeof(extPosePackedItem)];
     if (item->id == my_id) {
       ext_pose.x = item->x / 1000.0f;
       ext_pose.y = item->y / 1000.0f;
@@ -215,15 +215,15 @@ static void extPosePackedHandler(const CRTPPacket* pk) {
   }
 }
 
-static void lpsShortLppPacketHandler(CRTPPacket* pk) {
-  if (pk->size >= 2) {
-    bool success = lpsSendLppShort(pk->data[1], &pk->data[2], pk->size-2);
+static void lpsShortLppPacketHandler(AugmentedPacket* pk) {
+  if (pk->packet.size >= 2) {
+    bool success = lpsSendLppShort(pk->packet.data[1], &pk->packet.data[2], pk->packet.size-2);
 
-    pk->port = CRTP_PORT_LOCALIZATION;
-    pk->channel = GENERIC_TYPE;
-    pk->size = 3;
-    pk->data[0] = LPS_SHORT_LPP_PACKET;
-    pk->data[2] = success?1:0;
+    pk->packet.port = CRTP_PORT_LOCALIZATION;
+    pk->packet.channel = GENERIC_TYPE;
+    pk->packet.size = 3;
+    pk->packet.data[0] = LPS_SHORT_LPP_PACKET;
+    pk->packet.data[2] = success?1:0;
     // This is best effort, i.e. the blocking version is not needed
     crtpSendPacket(pk);
   }
@@ -254,27 +254,30 @@ static void lhPersistDataWorker(void* arg) {
     }
   }
 
-  CRTPPacket response = {
-    .port = CRTP_PORT_LOCALIZATION,
-    .channel = GENERIC_TYPE,
-    .size = 2,
-    .data = {LH_PERSIST_DATA, result}
+  AugmentedPacket response = {
+    .disableAck = 0,
+    .packet = {
+      .port = CRTP_PORT_LOCALIZATION,
+      .channel = GENERIC_TYPE,
+      .size = 2,
+      .data = {LH_PERSIST_DATA, result}
+    }
   };
 
   crtpSendPacketBlock(&response);
 }
 
-static void lhPersistDataHandler(CRTPPacket* pk) {
-  if (pk->size >= (1 + sizeof(LhPersistArgs_t))) {
-    LhPersistArgs_t* args = (LhPersistArgs_t*) &pk->data[1];
+static void lhPersistDataHandler(AugmentedPacket* pk) {
+  if (pk->packet.size >= (1 + sizeof(LhPersistArgs_t))) {
+    LhPersistArgs_t* args = (LhPersistArgs_t*) &pk->packet.data[1];
     workerSchedule(lhPersistDataWorker, (void*)args->combinedField);
   }
 }
 
-static void genericLocHandle(CRTPPacket* pk)
+static void genericLocHandle(AugmentedPacket* pk)
 {
-  const uint8_t type = pk->data[0];
-  if (pk->size < 1) return;
+  const uint8_t type = pk->packet.data[0];
+  if (pk->packet.size < 1) return;
 
   switch (type) {
     case LPS_SHORT_LPP_PACKET:
@@ -301,11 +304,11 @@ static void genericLocHandle(CRTPPacket* pk)
   }
 }
 
-static void extPositionPackedHandler(CRTPPacket* pk)
+static void extPositionPackedHandler(AugmentedPacket* pk)
 {
-  uint8_t numItems = pk->size / sizeof(extPositionPackedItem);
+  uint8_t numItems = pk->packet.size / sizeof(extPositionPackedItem);
   for (uint8_t i = 0; i < numItems; ++i) {
-    const extPositionPackedItem* item = (const extPositionPackedItem*)&pk->data[i * sizeof(extPositionPackedItem)];
+    const extPositionPackedItem* item = (const extPositionPackedItem*)&pk->packet.data[i * sizeof(extPositionPackedItem)];
     ext_pos.x = item->x / 1000.0f;
     ext_pos.y = item->y / 1000.0f;
     ext_pos.z = item->z / 1000.0f;
@@ -324,7 +327,7 @@ static void extPositionPackedHandler(CRTPPacket* pk)
 
 void locSrvSendRangeFloat(uint8_t id, float range)
 {
-  rangePacket *rp = (rangePacket *)pkRange.data;
+  rangePacket *rp = (rangePacket *)pkRange.packet.data;
 
   ASSERT(rangeIndex <= NBR_OF_RANGES_IN_PACKET);
 
@@ -337,9 +340,9 @@ void locSrvSendRangeFloat(uint8_t id, float range)
     if (rangeIndex >= 5)
     {
       rp->type = RANGE_STREAM_FLOAT;
-      pkRange.port = CRTP_PORT_LOCALIZATION;
-      pkRange.channel = GENERIC_TYPE;
-      pkRange.size = sizeof(rangePacket);
+      pkRange.packet.port = CRTP_PORT_LOCALIZATION;
+      pkRange.packet.channel = GENERIC_TYPE;
+      pkRange.packet.size = sizeof(rangePacket);
       // This is best effort, i.e. the blocking version is not needed
       crtpSendPacket(&pkRange);
       rangeIndex = 0;
@@ -349,7 +352,7 @@ void locSrvSendRangeFloat(uint8_t id, float range)
 
 void locSrvSendLighthouseAngle(int basestation, pulseProcessorResult_t* angles)
 {
-  anglePacket *ap = (anglePacket *)LhAngle.data;
+  anglePacket *ap = (anglePacket *)LhAngle.packet.data;
 
   if (enableLighthouseAngleStream) {
     ap->basestation = basestation;
@@ -366,9 +369,9 @@ void locSrvSendLighthouseAngle(int basestation, pulseProcessorResult_t* angles)
     }
 
     ap->type = LH_ANGLE_STREAM;
-    LhAngle.port = CRTP_PORT_LOCALIZATION;
-    LhAngle.channel = GENERIC_TYPE;
-    LhAngle.size = sizeof(anglePacket);
+    LhAngle.packet.port = CRTP_PORT_LOCALIZATION;
+    LhAngle.packet.channel = GENERIC_TYPE;
+    LhAngle.packet.size = sizeof(anglePacket);
     // This is best effort, i.e. the blocking version is not needed
     crtpSendPacket(&LhAngle);
   }
