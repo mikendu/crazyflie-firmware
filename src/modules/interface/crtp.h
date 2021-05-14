@@ -59,7 +59,7 @@ typedef struct _CRTPPacket
         struct {
 #ifndef CRTP_HEADER_COMPAT
           uint8_t channel     : 2;      //< Selected channel within port
-          uint8_t reserved    : 2;
+          uint8_t broadcast   : 2;      // Re-purposing for a broadcast flag (was previously reserved)
           uint8_t port        : 4;      //< Selected port
 #else
           uint8_t channel  : 2;

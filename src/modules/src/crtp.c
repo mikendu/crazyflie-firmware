@@ -148,8 +148,12 @@ void crtpTxTask(void *param)
   {
     if (link != &nopLink)
     {
+      p.broadcast = 0;
       if (xQueueReceive(txQueue, &p, portMAX_DELAY) == pdTRUE)
       {
+        if (p.broadcast) {
+          continue;
+        }
         // Keep testing, if the link changes to USB it will go though
         while (link->sendPacket(&p) == false)
         {
@@ -212,6 +216,9 @@ int crtpSendPacket(CRTPPacket *p)
   ASSERT(p);
   ASSERT(p->size <= CRTP_MAX_DATA_SIZE);
 
+  if (p->broadcast) {
+    return pdPASS;
+  }
   return xQueueSend(txQueue, p, 0);
 }
 
@@ -220,6 +227,9 @@ int crtpSendPacketBlock(CRTPPacket *p)
   ASSERT(p);
   ASSERT(p->size <= CRTP_MAX_DATA_SIZE);
 
+  if (p->broadcast) {
+    return pdPASS;
+  }
   return xQueueSend(txQueue, p, portMAX_DELAY);
 }
 

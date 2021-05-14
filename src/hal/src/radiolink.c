@@ -152,6 +152,7 @@ void radiolinkSetPowerDbm(int8_t powerDbm)
 void radiolinkSyslinkDispatch(SyslinkPacket *slp)
 {
   static SyslinkPacket txPacket;
+  ((CRTPPacket*)slp)->broadcast = 0;
 
   if (slp->type == SYSLINK_RADIO_RAW || slp->type == SYSLINK_RADIO_RAW_BROADCAST) {
     lastPacketTick = xTaskGetTickCount();
@@ -171,6 +172,7 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
     }
   } else if (slp->type == SYSLINK_RADIO_RAW_BROADCAST)
   {
+    ((CRTPPacket*)slp)->broadcast = 1;
     slp->length--; // Decrease to get CRTP size.
     // broadcasts are best effort, so no need to handle the case where the queue is full
     xQueueSend(crtpPacketDelivery, &slp->length, 0);
