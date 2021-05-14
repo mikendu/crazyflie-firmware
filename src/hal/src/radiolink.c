@@ -159,8 +159,10 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
 
   if (slp->type == SYSLINK_RADIO_RAW)
   {
-    // Assert that we are not dopping any packets
+    slp->length--; // Decrease to get CRTP size.
     ((AugmentedPacket*)slp)->disableAck = 0;
+
+    // Assert that we are not dopping any packets
     ASSERT(xQueueSend(crtpPacketDelivery, slp, 0) == pdPASS);
     ledseqRun(&seq_linkUp);
 
@@ -172,8 +174,10 @@ void radiolinkSyslinkDispatch(SyslinkPacket *slp)
     }
   } else if (slp->type == SYSLINK_RADIO_RAW_BROADCAST)
   {
-    // broadcasts are best effort, so no need to handle the case where the queue is full
+    slp->length--; // Decrease to get CRTP size.
     ((AugmentedPacket*)slp)->disableAck = 1;
+
+    // broadcasts are best effort, so no need to handle the case where the queue is full
     xQueueSend(crtpPacketDelivery, slp, 0);
     ledseqRun(&seq_linkUp);
     // no ack for broadcasts
