@@ -43,7 +43,7 @@ from cflib.crazyflie.mem import LighthouseBsGeometry
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.localization import LighthouseConfigWriter
 
-uri = 'radio://0/80'
+uri = "radio://0/55/2M/E7E7E7E701"
 
 
 class WriteMem:
@@ -61,13 +61,13 @@ class WriteMem:
 
 
 geo0 = LighthouseBsGeometry()
-geo0.origin = [-1.01977998,-0.19424433, 1.97086964]
-geo0.rotation_matrix = [[ 0.66385385,-0.26347329, 0.6999142 ], [0.18206993,0.96466617,0.19044612], [-0.72536102, 0.00100494, 0.68836792], ]
+geo0.origin = [0.633806, -1.434138, 2.269608]
+geo0.rotation_matrix = [[-0.149618, -0.900574, -0.408143 ], [0.863523, -0.320081, 0.389713 ], [-0.481604, -0.294133, 0.825556 ] ]
 geo0.valid = True
 
 geo1 = LighthouseBsGeometry()
-geo1.origin = [0, 0, 0]
-geo1.rotation_matrix = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+geo1.origin = [0.760265, 1.032949, 2.193123]
+geo1.rotation_matrix = [[-0.265548, 0.944388, -0.193948 ], [-0.841734, -0.325191, -0.430970 ], [-0.470073, 0.048809, 0.881277 ] ]
 geo1.valid = False
 
 calib0 = LighthouseBsCalibration()

@@ -33,5 +33,5 @@ $ make libarm_math.a
 ```
 - In a **Cygwin shell** (not GitBash, not MinTTY), you can now build the firmware:
 ```shell
-$ make PLATFORM=cf2 && cp ./cf2.bin ../firmware-tools/crazyflie-firmware/cf2.bin
+$ make PLATFORM=cf2 && cp ./cf2.bin ../firmware-tools/cf2.bin
 ```
