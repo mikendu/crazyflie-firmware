@@ -43,7 +43,7 @@ from cflib.crazyflie.mem import LighthouseBsGeometry
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.localization import LighthouseConfigWriter
 
-uri = "radio://0/55/2M/E7E7E7E701"
+uri = "radio://0/120/2M/E7E7E7E703"
 
 
 class WriteMem:

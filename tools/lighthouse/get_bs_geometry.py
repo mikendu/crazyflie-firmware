@@ -139,7 +139,7 @@ class Estimator:
 
 
 parser = argparse.ArgumentParser()
-uri = "radio://0/55/2M/E7E7E7E701"
+uri = "radio://0/120/2M/E7E7E7E703"
 parser.add_argument("--uri", help="uri to use when connecting to the Crazyflie. Default: " + uri)
 parser.add_argument("--write", help="upload the calculated geo data to the Crazflie", action="store_true")
 args = parser.parse_args()

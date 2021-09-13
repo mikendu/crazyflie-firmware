@@ -212,6 +212,25 @@ TESTABLE_STATIC void clearWorkspace(pulseProcessorV2PulseWorkspace_t* pulseWorks
     pulseWorkspace->slotsUsed = 0;
 }
 
+
+static inline bool isValidChannel(uint8_t channel) {
+    return (channel == 0 || channel == 4 || channel == 9 || channel == 14);
+}
+
+static inline uint8_t transformChannel(uint8_t channel) {
+    if (channel == 4) {
+        return 1;
+    } 
+    if (channel == 9) {
+        return 2;
+    }
+    if (channel == 14) {
+        return 3;
+    }
+    return channel;
+}
+
+
 static bool processFrame(const pulseProcessorFrame_t* frameData, pulseProcessorV2PulseWorkspace_t* pulseWorkspace, pulseProcessorV2BlockWorkspace_t* blockWorkspace) {
     int nrOfBlocks = 0;
 
@@ -239,8 +258,7 @@ void pulseProcessorV2ConvertToV1Angles(const float v2Angle1, const float v2Angle
 }
 
 static void calculateAngles(const pulseProcessorV2SweepBlock_t* latestBlock, const pulseProcessorV2SweepBlock_t* previousBlock, pulseProcessorResult_t* angles) {
-    const uint8_t channel = latestBlock->channel;
-
+    const uint8_t channel = transformChannel(latestBlock->channel);
     for (int i = 0; i < PULSE_PROCESSOR_N_SENSORS; i++) {
         uint32_t firstOffset = previousBlock->offset[i];
         uint32_t secondOffset = latestBlock->offset[i];
@@ -272,8 +290,8 @@ TESTABLE_STATIC bool isBlockPairGood(const pulseProcessorV2SweepBlock_t* latest,
 TESTABLE_STATIC bool handleCalibrationData(pulseProcessor_t *state, const pulseProcessorFrame_t* frameData) {
     bool isFullMessage = false;
 
-    if (frameData->channelFound && frameData->channel < PULSE_PROCESSOR_N_BASE_STATIONS) {
-        const uint8_t channel = frameData->channel;
+    if (frameData->channelFound && isValidChannel(frameData->channel)) {
+        const uint8_t channel = transformChannel(frameData->channel);
         if (frameData->offset != NO_OFFSET) {
             const uint32_t prevTimestamp0 = state->v2.ootxTimestamps[channel];
             const uint32_t timestamp0 = TS_DIFF(frameData->timestamp, frameData->offset);
@@ -297,8 +315,8 @@ bool handleAngles(pulseProcessor_t *state, const pulseProcessorFrame_t* frameDat
     int nrOfBlocks = processFrame(frameData, &state->v2.pulseWorkspace, &state->v2.blockWorkspace);
     for (int i = 0; i < nrOfBlocks; i++) {
         const pulseProcessorV2SweepBlock_t* block = &state->v2.blockWorkspace.blocks[i];
-        const uint8_t channel = block->channel;
-        if (channel < PULSE_PROCESSOR_N_BASE_STATIONS) {
+        if (isValidChannel(block->channel)) {
+            const uint8_t channel = transformChannel(block->channel);
             pulseProcessorV2SweepBlock_t* previousBlock = &state->v2.blocks[channel];
             if (isBlockPairGood(block, previousBlock)) {
                 calculateAngles(block, previousBlock, angles);

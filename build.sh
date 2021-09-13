@@ -1,0 +1,1 @@
+clear && make PLATFORM=cf2 && cp ./cf2.bin ../firmware-tools/cf2.bin

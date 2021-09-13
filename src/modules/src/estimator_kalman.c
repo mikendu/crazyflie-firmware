@@ -232,9 +232,10 @@ static void kalmanTask(void* parameters) {
 
       nextPrediction = osTick + S2T(1.0f / PREDICT_RATE);
 
+      /*
       if (!rateSupervisorValidate(&rateSupervisorContext, T2M(osTick))) {
         DEBUG_PRINT("WARNING: Kalman prediction rate low (%lu)\n", rateSupervisorLatestCount(&rateSupervisorContext));
-      }
+      }*/
     }
 
     /**

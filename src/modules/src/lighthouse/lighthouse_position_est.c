@@ -39,6 +39,7 @@
 #include "lighthouse_position_est.h"
 #include "lighthouse_geometry.h"
 #include "lighthouse_state.h"
+#include "debug.h"
 
 #define ONE_SECOND 1000
 #define HALF_SECOND 500
@@ -221,21 +222,71 @@ static vec3d position;
 static vec3d positionLog;
 static float deltaLog;
 
+static float baseStationWeights[4] = { 0 };
+static uint16_t baseStationCounters[4] = { 0 };
+
+#define DECAY_ALPHA 0.875f
+static const float inverseAlpha = 1.0f - DECAY_ALPHA;
+
+
+
+
+void setBaseStationPreference(const uint8_t primary, const uint8_t secondary)
+{
+
+  bool primaryRampedUp = baseStationWeights[primary] >= 0.95f;
+  bool secondaryRampedUp = baseStationWeights[secondary] >= 0.325f;
+
+  for (uint8_t i = 0; i < PULSE_PROCESSOR_N_BASE_STATIONS; i++) {
+    float targetWeight = (primaryRampedUp && secondaryRampedUp) ? 0.25f : baseStationWeights[i];
+    if (i == secondary) 
+      targetWeight = 0.475f;
+
+    if (i == primary)
+      targetWeight = 1.0f;
+      
+    baseStationWeights[i] = (targetWeight  * inverseAlpha) + (baseStationWeights[i] * DECAY_ALPHA);
+  }
+}
+
+
+
+static inline uint8_t getValidBaseStationIndex(const pulseProcessorBaseStationMeasuremnt_t measurements[4], uint8_t takenIndex) {
+  if (takenIndex != 0 && measurements[0].validCount == PULSE_PROCESSOR_N_SWEEPS) {
+    return 0;
+  }
+  if (takenIndex != 1 && measurements[1].validCount == PULSE_PROCESSOR_N_SWEEPS) {
+    return 1;
+  }
+  if (takenIndex != 2 && measurements[2].validCount == PULSE_PROCESSOR_N_SWEEPS) {
+    return 0;
+  }
+  if (takenIndex != 3 && measurements[3].validCount == PULSE_PROCESSOR_N_SWEEPS) {
+    return 3;
+  }  
+  return -1;
+}
+
+
 static void estimatePositionCrossingBeams(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation) {
   memset(&ext_pos, 0, sizeof(ext_pos));
   uint8_t sensorsUsed = 0;
   float deltaSum = 0;
   float delta;
+  // uint8_t indexOne = primaryBaseStation;
+  // uint8_t indexTwo = secondaryBaseStation;
+
 
   // Average over all sensors with valid data
   for (size_t sensor = 0; sensor < PULSE_PROCESSOR_N_SENSORS; sensor++) {
+      
       // LH2 angles are converted to LH1 angles, so it is OK to use sensorMeasurementsLh1
-      pulseProcessorBaseStationMeasuremnt_t* bs0Measurement = &angles->sensorMeasurementsLh1[sensor].baseStatonMeasurements[0];
-      pulseProcessorBaseStationMeasuremnt_t* bs1Measurement = &angles->sensorMeasurementsLh1[sensor].baseStatonMeasurements[1];
+      const pulseProcessorBaseStationMeasuremnt_t* measurements = angles->sensorMeasurementsLh1[sensor].baseStatonMeasurements;
+      uint8_t indexOne = getValidBaseStationIndex(measurements, -1);
+      uint8_t indexTwo = getValidBaseStationIndex(measurements, indexOne);
 
-      if (bs0Measurement->validCount == PULSE_PROCESSOR_N_SWEEPS && bs1Measurement->validCount == PULSE_PROCESSOR_N_SWEEPS) {
-        lighthouseGeometryGetPositionFromRayIntersection(state->bsGeometry, bs0Measurement->correctedAngles, bs1Measurement->correctedAngles, position, &delta);
-
+      if (indexOne >= 0 && indexTwo >= 0) {
+        lighthouseGeometryGetPositionFromRayIntersection(state->bsGeometry, indexOne, indexTwo, measurements[indexOne].correctedAngles, measurements[indexTwo].correctedAngles, position, &delta);
         deltaSum += delta;
 
         ext_pos.x += position[0];
@@ -315,39 +366,54 @@ static void estimatePositionSweepsLh1(const pulseProcessor_t* appState, pulsePro
 }
 
 static void estimatePositionSweepsLh2(const pulseProcessor_t* appState, pulseProcessorResult_t* angles, int baseStation) {
-  const lighthouseCalibration_t* bsCalib = &appState->bsCalibration[baseStation];
-  sweepAngleMeasurement_t sweepInfo;
-  sweepInfo.stdDev = sweepStdLh2;
-  sweepInfo.rotorPos = &appState->bsGeometry[baseStation].origin;
-  sweepInfo.rotorRot = &appState->bsGeometry[baseStation].mat;
-  sweepInfo.rotorRotInv = &appState->bsGeoCache[baseStation].baseStationInvertedRotationMatrixes;
-  sweepInfo.calibrationMeasurementModel = lighthouseCalibrationMeasurementModelLh2;
-  sweepInfo.basestationId = baseStation;
+  
+  if (baseStationWeights[baseStation] < 0.05f)
+    return;
 
-  for (size_t sensor = 0; sensor < PULSE_PROCESSOR_N_SENSORS; sensor++) {
-    sweepInfo.sensorId = sensor;
-    pulseProcessorBaseStationMeasuremnt_t* bsMeasurement = &angles->sensorMeasurementsLh2[sensor].baseStatonMeasurements[baseStation];
-    if (bsMeasurement->validCount == PULSE_PROCESSOR_N_SWEEPS) {
-      sweepInfo.sensorPos = &sensorDeckPositions[sensor];
+  int mod = (int) roundf(1.0f / baseStationWeights[baseStation]);
+  baseStationCounters[baseStation] += 1;
+  if ((baseStationCounters[baseStation] % mod) == 0){
+    baseStationCounters[baseStation] = 0;
 
-      sweepInfo.measuredSweepAngle = bsMeasurement->angles[0];
-      if (sweepInfo.measuredSweepAngle != 0) {
-        sweepInfo.t = -t30;
-        sweepInfo.calib = &bsCalib->sweep[0];
-        sweepInfo.sweepId = 0;
-        estimatorEnqueueSweepAngles(&sweepInfo);
-        STATS_CNT_RATE_EVENT(bsEstRates[baseStation]);
-        STATS_CNT_RATE_EVENT(&positionRate);
+    const lighthouseCalibration_t* bsCalib = &appState->bsCalibration[baseStation];
+    sweepAngleMeasurement_t sweepInfo;
+    sweepInfo.stdDev = sweepStdLh2;
+    sweepInfo.rotorPos = &appState->bsGeometry[baseStation].origin;
+    sweepInfo.rotorRot = &appState->bsGeometry[baseStation].mat;
+    sweepInfo.rotorRotInv = &appState->bsGeoCache[baseStation].baseStationInvertedRotationMatrixes;
+    sweepInfo.calibrationMeasurementModel = lighthouseCalibrationMeasurementModelLh2;
+    sweepInfo.basestationId = baseStation;
+
+    for (size_t sensor = 0; sensor < PULSE_PROCESSOR_N_SENSORS; sensor++) {
+      sweepInfo.sensorId = sensor;
+      pulseProcessorBaseStationMeasuremnt_t* bsMeasurement = &angles->sensorMeasurementsLh2[sensor].baseStatonMeasurements[baseStation];
+
+      // if (bsMeasurement->validCount == PULSE_PROCESSOR_N_SWEEPS) {
+
+      if (bsMeasurement->validCount > 0) {
+        sweepInfo.sensorPos = &sensorDeckPositions[sensor];
+
+        sweepInfo.measuredSweepAngle = bsMeasurement->angles[0];
+        if (sweepInfo.measuredSweepAngle != 0) {
+          sweepInfo.t = -t30;
+          sweepInfo.calib = &bsCalib->sweep[0];
+          sweepInfo.sweepId = 0;
+          estimatorEnqueueSweepAngles(&sweepInfo);
+          STATS_CNT_RATE_EVENT(bsEstRates[baseStation]);
+          STATS_CNT_RATE_EVENT(&positionRate);
+        }
       }
 
-      sweepInfo.measuredSweepAngle = bsMeasurement->angles[1];
-      if (sweepInfo.measuredSweepAngle != 0) {
-        sweepInfo.t = t30;
-        sweepInfo.calib = &bsCalib->sweep[1];
-        sweepInfo.sweepId = 1;
-        estimatorEnqueueSweepAngles(&sweepInfo);
-        STATS_CNT_RATE_EVENT(bsEstRates[baseStation]);
-        STATS_CNT_RATE_EVENT(&positionRate);
+      if (bsMeasurement->validCount > 1) {
+        sweepInfo.measuredSweepAngle = bsMeasurement->angles[1];
+        if (sweepInfo.measuredSweepAngle != 0) {
+          sweepInfo.t = t30;
+          sweepInfo.calib = &bsCalib->sweep[1];
+          sweepInfo.sweepId = 1;
+          estimatorEnqueueSweepAngles(&sweepInfo);
+          STATS_CNT_RATE_EVENT(bsEstRates[baseStation]);
+          STATS_CNT_RATE_EVENT(&positionRate);
+        }
       }
     }
   }
@@ -437,8 +503,25 @@ static void estimateYaw(const pulseProcessor_t *state, pulseProcessorResult_t* a
   }
 }
 
+static inline uint8_t validBaseStationCount(const pulseProcessor_t *state) {
+  uint8_t count = 0;
+  if (state->bsGeometry[0].valid) {
+    count += 1;
+  }
+  if (state->bsGeometry[1].valid) {
+    count += 1;
+  }
+  if (state->bsGeometry[2].valid) {
+    count += 1;
+  }
+  if (state->bsGeometry[3].valid) {
+    count += 1;
+  }
+  return count;
+}
+
 void lighthousePositionEstimatePoseCrossingBeams(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation) {
-  if (state->bsGeometry[0].valid && state->bsGeometry[1].valid) {
+  if (validBaseStationCount(state) >= 2) {
     estimatePositionCrossingBeams(state, angles, baseStation);
     estimateYaw(state, angles, baseStation);
   } else {
@@ -464,6 +547,11 @@ LOG_ADD(LOG_FLOAT, y, &positionLog[1])
 LOG_ADD(LOG_FLOAT, z, &positionLog[2])
 
 LOG_ADD(LOG_FLOAT, delta, &deltaLog)
+
+LOG_ADD(LOG_FLOAT, bsWeight0, &baseStationWeights[0])
+LOG_ADD(LOG_FLOAT, bsWeight1, &baseStationWeights[1])
+LOG_ADD(LOG_FLOAT, bsWeight2, &baseStationWeights[2])
+LOG_ADD(LOG_FLOAT, bsWeight3, &baseStationWeights[3])
 
 LOG_ADD(LOG_UINT16, bsGeoVal, &lighthouseCoreState.baseStationGeoValidMap)
 LOG_ADD(LOG_UINT16, bsCalVal, &lighthouseCoreState.baseStationCalibValidMap)

@@ -81,7 +81,9 @@ static STATS_CNT_RATE_DEFINE(cycleRate, ONE_SECOND);
 
 static STATS_CNT_RATE_DEFINE(bs0Rate, HALF_SECOND);
 static STATS_CNT_RATE_DEFINE(bs1Rate, HALF_SECOND);
-static statsCntRateLogger_t* bsRates[PULSE_PROCESSOR_N_BASE_STATIONS] = {&bs0Rate, &bs1Rate};
+static STATS_CNT_RATE_DEFINE(bs2Rate, HALF_SECOND);
+static STATS_CNT_RATE_DEFINE(bs3Rate, HALF_SECOND);
+static statsCntRateLogger_t* bsRates[PULSE_PROCESSOR_N_BASE_STATIONS] = {&bs0Rate, &bs1Rate, &bs2Rate, &bs3Rate};
 
 
 // A bitmap that indicates which base staions that are received
@@ -106,7 +108,7 @@ static lhSystemStatus_t systemStatus;
 static lhSystemStatus_t systemStatusWs;
 static lhSystemStatus_t ledInternalStatus = statusToEstimator;
 
-static const uint32_t SYSTEM_STATUS_UPDATE_INTERVAL = FIFTH_SECOND;
+static const uint32_t SYSTEM_STATUS_UPDATE_INTERVAL = 100;
 static uint32_t nextUpdateTimeOfSystemStatus = 0;
 
 static uint16_t pulseWidth[PULSE_PROCESSOR_N_SENSORS];
@@ -116,7 +118,24 @@ static lighthouseBaseStationType_t systemType = lighthouseBsTypeV2;
 static lighthouseBaseStationType_t previousSystemType = lighthouseBsTypeV2;
 static pulseProcessorProcessPulse_t pulseProcessorProcessPulse = pulseProcessorV2ProcessPulse;
 
+
 #define UART_FRAME_LENGTH 12
+
+
+#define ALPHA_UP 0.65f
+#define ALPHA_DOWN 0.875f
+static const float inverseAlphaUp = 1.0f - ALPHA_UP;
+static const float inverseAlphaDown = 1.0f - ALPHA_DOWN;
+static float smoothedRates[PULSE_PROCESSOR_N_BASE_STATIONS] = { 0 };
+static uint8_t primaryBaseStation = -1;
+static uint8_t secondaryBaseStation = -1;
+static float baseStationRate = 0;
+static float baseStationRateSmooth = 0;
+static uint8_t systemUpdateCount = 0;
+
+static const uint32_t BASE_STATION_UPDATE_INTERVAL = 1000;
+static uint32_t baseStationUpdateTimestamp = 0;
+
 
 
 static bool deckIsFlashed = false;
@@ -418,23 +437,74 @@ static void deckHealthCheck(pulseProcessor_t *appState, const lighthouseUartFram
   }
 }
 
+static inline uint8_t findViableBaseStation(const uint32_t now_ms, uint8_t currentSelection, uint8_t taken) {
+  float selectedRate = (currentSelection >= 0) ? smoothedRates[currentSelection] : 0;
+  if (selectedRate >= 15.0f && currentSelection != taken) {    
+    return currentSelection;
+  }
+
+  uint8_t newSelection = -1;
+  float maxRate = -1;
+  
+  for (uint8_t i = 0; i < PULSE_PROCESSOR_N_BASE_STATIONS; i++) {
+    if (i == taken)
+      continue;
+
+    float currentRate = smoothedRates[i];
+    if (currentRate > maxRate) {
+      maxRate = currentRate;
+      newSelection = i;
+    }
+  }
+
+  if ( now_ms >= baseStationUpdateTimestamp && newSelection >= 0 && newSelection != taken && (currentSelection == taken || maxRate >= (2.0f * selectedRate))) {
+    baseStationUpdateTimestamp = now_ms + BASE_STATION_UPDATE_INTERVAL;
+    return newSelection;
+  }
+
+  return currentSelection;
+}
+
+static inline void updateBaseStationPreferences(const uint32_t now_ms) {
+  primaryBaseStation = findViableBaseStation(now_ms, primaryBaseStation, secondaryBaseStation);
+  secondaryBaseStation = findViableBaseStation(now_ms, secondaryBaseStation, primaryBaseStation);
+  setBaseStationPreference(primaryBaseStation, secondaryBaseStation);
+}
+
 static void updateSystemStatus(const uint32_t now_ms) {
   if (now_ms > nextUpdateTimeOfSystemStatus) {
-    baseStationReceivedMap = baseStationReceivedMapWs;
-    baseStationReceivedMapWs = 0;
+    systemUpdateCount += 1;
+    if (systemUpdateCount >= 2) {
+      baseStationReceivedMap = baseStationReceivedMapWs;
+      baseStationReceivedMapWs = 0;
 
-    baseStationActiveMap = baseStationActiveMapWs;
-    baseStationActiveMapWs = 0;
+      baseStationActiveMap = baseStationActiveMapWs;
+      baseStationActiveMapWs = 0;
 
-    systemStatus = systemStatusWs;
-    systemStatusWs = statusNotReceiving;
+      systemStatus = systemStatusWs;
+      systemStatusWs = statusNotReceiving;
 
-    if (calibStatusReset) {
-      calibStatusReset = 0;
-      baseStationCalibUpdatedMap = 0;
+      if (calibStatusReset) {
+        calibStatusReset = 0;
+        baseStationCalibUpdatedMap = 0;
+      }
+      systemUpdateCount = 0;
     }
 
     nextUpdateTimeOfSystemStatus = now_ms + SYSTEM_STATUS_UPDATE_INTERVAL;
+    
+    for (uint8_t i = 0; i < PULSE_PROCESSOR_N_BASE_STATIONS; i++) {
+      float rate = statsCntRateCounterUpdate(&bsRates[i]->rateCounter, now_ms);
+      bool up = rate > smoothedRates[i];
+      float alpha = up ? ALPHA_UP : ALPHA_DOWN;
+      float inverseAlpha = up ? inverseAlphaUp : inverseAlphaDown;
+      smoothedRates[i] = (rate  * inverseAlpha) + (alpha * smoothedRates[i]);
+    }
+
+    baseStationRate = bsRates[0]->rateCounter.latestRate;
+    baseStationRateSmooth = smoothedRates[0];
+    updateBaseStationPreferences(now_ms);
+    // DEBUG_PRINT("rate 0: %f\n", (double)bsRates[0]->rateCounter.latestRate);
   }
 }
 
@@ -550,6 +620,8 @@ STATS_CNT_RATE_LOG_ADD(cycleRt, &cycleRate)
 
 STATS_CNT_RATE_LOG_ADD(bs0Rt, &bs0Rate)
 STATS_CNT_RATE_LOG_ADD(bs1Rt, &bs1Rate)
+STATS_CNT_RATE_LOG_ADD(bs2Rt, &bs2Rate)
+STATS_CNT_RATE_LOG_ADD(bs3Rt, &bs3Rate)
 
 LOG_ADD(LOG_UINT16, width0, &pulseWidth[0])
 LOG_ADD(LOG_UINT16, width1, &pulseWidth[1])
@@ -557,6 +629,10 @@ LOG_ADD(LOG_UINT16, width2, &pulseWidth[2])
 LOG_ADD(LOG_UINT16, width3, &pulseWidth[3])
 
 LOG_ADD(LOG_UINT8, comSync, &uartSynchronized)
+LOG_ADD(LOG_FLOAT, b_rt, &baseStationRate)
+LOG_ADD(LOG_FLOAT, b_rts, &baseStationRateSmooth)
+LOG_ADD(LOG_UINT8, bs_primary, &primaryBaseStation)
+LOG_ADD(LOG_UINT8, bs_secondary, &secondaryBaseStation)
 
 LOG_ADD(LOG_UINT16, bsReceive, &baseStationReceivedMap)
 LOG_ADD(LOG_UINT16, bsActive, &baseStationActiveMap)

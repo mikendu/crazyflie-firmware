@@ -25,7 +25,7 @@ typedef struct {
  * @param position - (output) the closest point between the rays
  * @param postion_delta - (output) the distance between the rays at the closest point
  */
-bool lighthouseGeometryGetPositionFromRayIntersection(const baseStationGeometry_t baseStations[2], float angles1[2], float angles2[2], vec3d position, float *position_delta);
+bool lighthouseGeometryGetPositionFromRayIntersection(const baseStationGeometry_t baseStations[4], uint8_t indexOne, uint8_t indexTwo, const float angles1[2], const float angles2[2], vec3d position, float *position_delta);
 
 /**
  * @brief Get the base station position from the base station geometry in world reference frame. This position can be seen as the
