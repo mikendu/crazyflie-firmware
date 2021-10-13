@@ -33,7 +33,7 @@
 
 void lighthousePositionEstInit();
 
-void setBaseStationPreference(const uint8_t primary, const uint8_t secondary);
+//void setBaseStationPreference(const uint8_t primary, const uint8_t secondary);
 
 /**
  * @brief Set new geometry data for one base station
